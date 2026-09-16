@@ -12,3 +12,126 @@ datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
 }
+
+enum LoanStatus {
+  MENUNGGU
+  DISETUJUI
+  DITOLAK
+  DIPINJAM
+  DIKEMBALIKAN
+  DIBATALKAN
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  name         String
+  email        String    @unique
+  passwordHash String
+  phone        String?
+  address      String?
+  isActive     Boolean   @default(true)
+
+  roleId       Int
+  role         Role      @relation(fields: [roleId], references: [id])
+
+  loans        Loan[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([roleId])
+}
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+
+  users       User[]
+  permissions RolePermission[]
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  description String?
+
+  roles       RolePermission[]
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+
+  items       Item[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Item {
+  id          Int      @id @default(autoincrement())
+  categoryId  Int
+
+  name        String
+  code        String   @unique
+  description String?
+  quantity    Int      @default(0)
+  available   Int      @default(0)
+  condition   String   @default("BAIK")
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+
+  category    Category @relation(fields: [categoryId], references: [id])
+  loans       Loan[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([categoryId])
+}
+
+model Loan {
+  id              Int        @id @default(autoincrement())
+  userId          Int
+  itemId          Int
+
+  quantity        Int
+  purpose         String
+  notes           String?
+
+  startDate       DateTime
+  endDate         DateTime
+  returnedAt      DateTime?
+
+  status          LoanStatus @default(MENUNGGU)
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+
+  user            User       @relation(fields: [userId], references: [id])
+  item            Item       @relation(fields: [itemId], references: [id])
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([itemId])
+  @@index([status])
+}

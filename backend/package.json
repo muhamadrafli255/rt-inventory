@@ -1,8 +1,8 @@
 {
-  "name": "backend",
+  "name": "rt-inventory-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Backend aplikasi inventaris dan peminjaman barang RT",
+  "main": "src/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/server.js",
