@@ -11,6 +11,7 @@ const app = express();
 const authRoutes = require("./routes/auth.routes");
 const permissionTestRoutes = require("./routes/permission-test.routes");
 const categoryRoutes = require("./routes/category.routes");
+const itemRoutes = require("./routes/item.routes");
 
 app.use(
     cors({
@@ -50,6 +51,7 @@ app.get('/api/health', (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/test-permissions", permissionTestRoutes);
 app.use("/api/categories", categoryRoutes);
+app.use("/api/items", itemRoutes);
 
 app.use((req, res) => {
     res.status(404).json({
