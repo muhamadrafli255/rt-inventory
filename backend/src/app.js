@@ -8,6 +8,8 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
+const authRoutes = require("./routes/auth.routes");
+
 app.use(
     cors({
         origin: process.env.FRONTEND_URL,
@@ -42,6 +44,8 @@ app.get('/api/health', (req, res) => {
         message: "RT Inventory Is Running",
     });
 });
+
+app.use("/api/auth", authRoutes);
 
 app.use((req, res) => {
     res.status(404).json({
