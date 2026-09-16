@@ -5,12 +5,12 @@ function validate(schema) {
     if (!result.success) {
       return res.status(422).json({
         success: false,
-        message: "Data tidak valid",
-        errors: result.error.flatten().fieldErrors,
+        message: "Data yang dikirim tidak valid",
+        errors: result.error.flatten(),
       });
     }
 
-    req.body = result.data;
+    req.validated = result.data;
 
     next();
   };

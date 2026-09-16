@@ -1,5 +1,6 @@
 const authService = require("../services/auth.service");
 const permissionService = require("../services/permission.service");
+const { success, error } = require("../utils/apiResponse");
 const {
   setRefreshTokenCookie,
   clearRefreshTokenCookie,
@@ -16,22 +17,27 @@ async function register(req, res) {
   });
 }
 
-async function login(req, res) {
-  const result = await authService.login(req.body, {
-    userAgent: req.get("user-agent"),
-    ipAddress: req.ip,
-  });
+async function login(req, res, next) {
+  try {
+    const result = await authService.login(
+      req.validated,
+      {
+        userAgent: req.headers["user-agent"],
+        ipAddress: req.ip,
+      }
+    );
 
-  setRefreshTokenCookie(res, result.refreshToken);
-
-  return res.json({
-    success: true,
-    message: "Login berhasil",
-    data: {
-      user: result.user,
-      accessToken: result.accessToken,
-    },
-  });
+    return success(
+      res,
+      {
+        accessToken: result.accessToken,
+        user: result.user,
+      },
+      "Login berhasil"
+    );
+  } catch (error) {
+    next(error);
+  }
 }
 
 async function refresh(req, res) {
