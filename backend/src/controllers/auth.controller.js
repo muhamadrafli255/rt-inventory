@@ -1,4 +1,5 @@
 const authService = require("../services/auth.service");
+const permissionService = require("../services/permission.service");
 const {
   setRefreshTokenCookie,
   clearRefreshTokenCookie,
@@ -71,10 +72,24 @@ async function me(req, res) {
   });
 }
 
+async function permissions(req, res) {
+  const permissions =
+    await permissionService.getUserPermissions(
+      req.auth.userId
+    );
+
+  return res.json({
+    success: true,
+    message: "Permission berhasil diambil",
+    data: permissions,
+  });
+}
+
 module.exports = {
   register,
   login,
   refresh,
   logout,
   me,
+  permissions,
 };

@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 
 const authRoutes = require("./routes/auth.routes");
+const permissionTestRoutes = require("./routes/permission-test.routes");
 
 app.use(
     cors({
@@ -46,6 +47,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/test-permissions", permissionTestRoutes);
 
 app.use((req, res) => {
     res.status(404).json({

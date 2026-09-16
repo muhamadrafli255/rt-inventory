@@ -27,16 +27,24 @@ async function authMiddleware(req, res, next) {
     const sessionId = payload.sessionId;
 
     const session = await prisma.session.findUnique({
-      where: {
+    where: {
         id: sessionId,
-      },
-      include: {
+    },
+    include: {
         user: {
-          include: {
-            role: true,
-          },
+        include: {
+            role: {
+            include: {
+                permissions: {
+                include: {
+                    permission: true,
+                },
+                },
+            },
+            },
         },
-      },
+        },
+    },
     });
 
     if (!session) {
@@ -68,9 +76,12 @@ async function authMiddleware(req, res, next) {
     }
 
     req.auth = {
-      userId,
-      sessionId,
-      role: session.user.role.name,
+    userId,
+    sessionId,
+    role: session.user.role.name,
+    permissions: session.user.role.permissions.map(
+        (rolePermission) => rolePermission.permission.name
+    ),
     };
 
     next();

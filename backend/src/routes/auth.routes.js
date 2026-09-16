@@ -41,4 +41,10 @@ router.get(
   asyncHandler(authController.me)
 );
 
+router.get(
+  "/permissions",
+  authMiddleware,
+  asyncHandler(authController.permissions)
+);
+
 module.exports = router;
