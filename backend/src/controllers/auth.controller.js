@@ -94,6 +94,32 @@ async function permissions(req, res) {
   });
 }
 
+async function updateProfile(req, res, next) {
+  try {
+    const updatedUser = await authService.updateProfile(
+      req.auth.userId,
+      req.validated || req.body
+    );
+
+    return success(res, updatedUser, "Profil berhasil diperbarui");
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function changePassword(req, res, next) {
+  try {
+    const result = await authService.changePassword(
+      req.auth.userId,
+      req.validated || req.body
+    );
+
+    return success(res, null, result.message);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   register,
   login,
@@ -101,4 +127,6 @@ module.exports = {
   logout,
   me,
   permissions,
+  updateProfile,
+  changePassword,
 };

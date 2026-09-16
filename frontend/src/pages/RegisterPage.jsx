@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Link,
   Navigate,
@@ -6,16 +6,18 @@ import {
 } from "react-router-dom";
 
 import {
+  AlertCircle,
   ArrowRight,
   Boxes,
+  ClipboardList,
   Eye,
   EyeOff,
+  LoaderCircle,
   LockKeyhole,
   Mail,
   ShieldCheck,
   User,
-  ClipboardList,
-  LoaderCircle,
+  X,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
@@ -37,6 +39,27 @@ export default function RegisterPage() {
 
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+
+  const [notification, setNotification] = useState(null);
+  const notificationTimerRef = useRef(null);
+
+  const showNotification = useCallback((type, message) => {
+    setNotification({ type, message });
+    if (notificationTimerRef.current) {
+      clearTimeout(notificationTimerRef.current);
+    }
+    notificationTimerRef.current = setTimeout(() => {
+      setNotification(null);
+    }, 4000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimerRef.current) {
+        clearTimeout(notificationTimerRef.current);
+      }
+    };
+  }, []);
 
   if (user) {
     return <Navigate to="/" replace />;
@@ -87,7 +110,13 @@ export default function RegisterPage() {
 
     setErrors(newErrors);
 
-    return Object.keys(newErrors).length === 0;
+    const hasError = Object.keys(newErrors).length > 0;
+    if (hasError) {
+      const firstErrorMsg = Object.values(newErrors)[0];
+      showNotification("error", firstErrorMsg);
+    }
+
+    return !hasError;
   }
 
   async function handleSubmit(event) {
@@ -121,23 +150,51 @@ export default function RegisterPage() {
       const fieldErrors =
         responseData?.errors?.fieldErrors || {};
 
+      const generalMsg =
+        responseData?.message ||
+        "Registrasi gagal. Silakan coba lagi.";
+
       setErrors({
         name: fieldErrors.name?.[0] || "",
         email: fieldErrors.email?.[0] || "",
         password: fieldErrors.password?.[0] || "",
         passwordConfirmation:
           fieldErrors.passwordConfirmation?.[0] || "",
-        general:
-          responseData?.message ||
-          "Registrasi gagal. Silakan coba lagi.",
+        general: generalMsg,
       });
+
+      showNotification("error", generalMsg);
     } finally {
       setIsLoading(false);
     }
   }
 
   return (
-    <main className="min-h-dvh w-full overflow-hidden bg-slate-50">
+    <main className="relative min-h-dvh w-full overflow-hidden bg-slate-50">
+      {/* Toast Notification */}
+      {notification && (
+        <div
+          className="fixed right-4 top-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50/95 px-4 py-3 text-rose-800 shadow-xl backdrop-blur-md transition-all"
+        >
+          <AlertCircle size={22} className="mt-0.5 shrink-0 text-rose-600" />
+
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">Registrasi Gagal</p>
+            <p className="mt-0.5 text-sm leading-5 opacity-90">
+              {notification.message}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setNotification(null)}
+            className="rounded-lg p-1 opacity-60 transition hover:bg-black/5 hover:opacity-100"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       <div className="grid min-h-dvh w-full lg:grid-cols-[1.05fr_0.95fr]">
         {/* LEFT BRAND PANEL */}
         <section className="relative hidden min-h-dvh overflow-hidden bg-emerald-700 lg:flex">
@@ -266,10 +323,11 @@ export default function RegisterPage() {
               </p>
             </div>
 
-            {/* General error */}
+            {/* General error banner */}
             {errors.general && (
-              <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-5 text-red-600">
-                {errors.general}
+              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-5 text-red-600">
+                <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                <span className="flex-1">{errors.general}</span>
               </div>
             )}
 

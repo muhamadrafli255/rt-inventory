@@ -8,6 +8,8 @@ const asyncHandler = require("../utils/asyncHandler");
 const {
   registerSchema,
   loginSchema,
+  updateProfileSchema,
+  changePasswordSchema,
 } = require("../validators/auth.validator");
 
 const router = express.Router();
@@ -45,6 +47,20 @@ router.get(
   "/permissions",
   authMiddleware,
   asyncHandler(authController.permissions)
+);
+
+router.put(
+  "/profile",
+  authMiddleware,
+  validate(updateProfileSchema),
+  asyncHandler(authController.updateProfile)
+);
+
+router.put(
+  "/change-password",
+  authMiddleware,
+  validate(changePasswordSchema),
+  asyncHandler(authController.changePassword)
 );
 
 module.exports = router;

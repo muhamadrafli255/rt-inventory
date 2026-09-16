@@ -311,10 +311,82 @@ async function getCurrentUser(userId) {
   };
 }
 
+async function updateProfile(userId, data) {
+  const user = await prisma.user.findUnique({
+    where: { id: Number(userId) },
+  });
+
+  if (!user) {
+    const error = new Error("User tidak ditemukan");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: Number(userId) },
+    data: {
+      name: data.name.trim(),
+      phone: data.phone?.trim() || null,
+      address: data.address?.trim() || null,
+    },
+    include: {
+      role: true,
+    },
+  });
+
+  return {
+    id: updatedUser.id,
+    name: updatedUser.name,
+    email: updatedUser.email,
+    phone: updatedUser.phone,
+    address: updatedUser.address,
+    isActive: updatedUser.isActive,
+    role: updatedUser.role.name,
+  };
+}
+
+async function changePassword(userId, { currentPassword, newPassword }) {
+  const user = await prisma.user.findUnique({
+    where: { id: Number(userId) },
+  });
+
+  if (!user) {
+    const error = new Error("User tidak ditemukan");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const isPasswordValid = await argon2.verify(
+    user.passwordHash,
+    currentPassword
+  );
+
+  if (!isPasswordValid) {
+    const error = new Error("Password saat ini tidak sesuai");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const newPasswordHash = await argon2.hash(newPassword, {
+    type: argon2.argon2id,
+  });
+
+  await prisma.user.update({
+    where: { id: Number(userId) },
+    data: {
+      passwordHash: newPasswordHash,
+    },
+  });
+
+  return { message: "Password berhasil diperbarui" };
+}
+
 module.exports = {
   register,
   login,
   refresh,
   logout,
   getCurrentUser,
+  updateProfile,
+  changePassword,
 };

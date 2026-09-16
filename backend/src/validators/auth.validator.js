@@ -38,7 +38,44 @@ const loginSchema = z.object({
     .min(1, "Password wajib diisi"),
 });
 
+const updateProfileSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Nama minimal 2 karakter")
+    .max(100, "Nama maksimal 100 karakter"),
+
+  phone: z
+    .string()
+    .trim()
+    .max(30)
+    .nullable()
+    .optional()
+    .or(z.literal("")),
+
+  address: z
+    .string()
+    .trim()
+    .max(255)
+    .nullable()
+    .optional()
+    .or(z.literal("")),
+});
+
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Password saat ini wajib diisi"),
+    newPassword: z.string().min(6, "Password baru minimal 6 karakter"),
+    confirmPassword: z.string().min(1, "Konfirmasi password wajib diisi"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Konfirmasi password baru tidak cocok",
+    path: ["confirmPassword"],
+  });
+
 module.exports = {
   registerSchema,
   loginSchema,
+  updateProfileSchema,
+  changePasswordSchema,
 };

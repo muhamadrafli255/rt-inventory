@@ -45,13 +45,15 @@ api.interceptors.response.use(
     const isUnauthorized =
       error.response?.status === 401;
 
-    const isRefreshRequest =
+    const isAuthEndpoint =
+      originalRequest?.url?.includes("/auth/login") ||
+      originalRequest?.url?.includes("/auth/register") ||
       originalRequest?.url?.includes("/auth/refresh");
 
     if (
       isUnauthorized &&
       !originalRequest._retry &&
-      !isRefreshRequest
+      !isAuthEndpoint
     ) {
       originalRequest._retry = true;
 
@@ -93,7 +95,12 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         localStorage.removeItem("accessToken");
-        window.location.href = "/login";
+        if (
+          window.location.pathname !== "/login" &&
+          window.location.pathname !== "/register"
+        ) {
+          window.location.href = "/login";
+        }
 
         return Promise.reject(refreshError);
       } finally {

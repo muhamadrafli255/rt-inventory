@@ -1,20 +1,24 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Eye,
-  EyeOff,
-  LockKeyhole,
-  Mail,
+  AlertCircle,
   ArrowRight,
   Boxes,
-  ShieldCheck,
-  LoaderCircle,
+  CheckCircle2,
   ClipboardList,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+  X,
 } from "lucide-react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, login } = useAuth();
 
   const [form, setForm] = useState({
@@ -25,6 +29,33 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const [notification, setNotification] = useState(null);
+  const notificationTimerRef = useRef(null);
+
+  const showNotification = useCallback((type, message) => {
+    setNotification({ type, message });
+    if (notificationTimerRef.current) {
+      clearTimeout(notificationTimerRef.current);
+    }
+    notificationTimerRef.current = setTimeout(() => {
+      setNotification(null);
+    }, 4000);
+  }, []);
+
+  useEffect(() => {
+    if (location.state?.message) {
+      showNotification("success", location.state.message);
+    }
+  }, [location.state, showNotification]);
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimerRef.current) {
+        clearTimeout(notificationTimerRef.current);
+      }
+    };
+  }, []);
 
   if (user) {
     return <Navigate to="/" replace />;
@@ -48,18 +79,53 @@ export default function LoginPage() {
     try {
       await login(form);
       navigate("/", { replace: true });
-    } catch (error) {
-      setError(
-        error.response?.data?.message ||
-          "Email atau password yang kamu masukkan salah.",
-      );
+    } catch (err) {
+      const message =
+        err.response?.data?.message ||
+        "Email atau password yang kamu masukkan salah.";
+      setError(message);
+      showNotification("error", message);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <main className="min-h-dvh w-full overflow-hidden bg-slate-50">
+    <main className="relative min-h-dvh w-full overflow-hidden bg-slate-50">
+      {/* Toast Notification */}
+      {notification && (
+        <div
+          className={`fixed right-4 top-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm items-start gap-3 rounded-2xl border px-4 py-3 shadow-xl backdrop-blur-md transition-all ${
+            notification.type === "success"
+              ? "border-emerald-200 bg-emerald-50/95 text-emerald-800"
+              : "border-rose-200 bg-rose-50/95 text-rose-800"
+          }`}
+        >
+          {notification.type === "success" ? (
+            <CheckCircle2 size={22} className="mt-0.5 shrink-0 text-emerald-600" />
+          ) : (
+            <AlertCircle size={22} className="mt-0.5 shrink-0 text-rose-600" />
+          )}
+
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">
+              {notification.type === "success" ? "Berhasil" : "Gagal Masuk"}
+            </p>
+            <p className="mt-0.5 text-sm leading-5 opacity-90">
+              {notification.message}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setNotification(null)}
+            className="rounded-lg p-1 opacity-60 transition hover:bg-black/5 hover:opacity-100"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       <div className="grid min-h-dvh w-full lg:grid-cols-[1.05fr_0.95fr]">
         {/* LEFT PANEL */}
         <section className="relative hidden min-h-dvh overflow-hidden bg-emerald-700 lg:flex">
@@ -177,10 +243,11 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {/* Error */}
+            {/* Error banner */}
             {error && (
-              <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-5 text-red-600">
-                {error}
+              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-5 text-red-600">
+                <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                <span className="flex-1">{error}</span>
               </div>
             )}
 

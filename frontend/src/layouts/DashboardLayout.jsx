@@ -34,14 +34,14 @@ const adminMenus = [
     icon: Tags,
   },
   {
-    label: "Peminjaman",
-    path: "/loans",
-    icon: ClipboardList,
-  },
-  {
     label: "Warga",
     path: "/users",
     icon: Users,
+  },
+  {
+    label: "Peminjaman",
+    path: "/loans",
+    icon: ClipboardList,
   },
 ];
 
@@ -186,13 +186,20 @@ export default function DashboardLayout() {
 
         {/* Bottom actions */}
         <div className="border-t border-slate-200 p-4">
-          <button
-            type="button"
-            className="mb-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+          <NavLink
+            to="/settings"
+            onClick={closeSidebarOnMobile}
+            className={({ isActive }) =>
+              `mb-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition ${
+                isActive
+                  ? "bg-slate-100 font-semibold text-emerald-700"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+              }`
+            }
           >
             <Settings size={18} />
             Pengaturan
-          </button>
+          </NavLink>
 
           <button
             type="button"

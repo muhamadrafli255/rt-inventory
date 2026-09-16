@@ -114,6 +114,18 @@ export function AuthProvider({ children }) {
     fetchCurrentUser();
   }, []);
 
+  async function updateProfile(payload) {
+    const response = await api.put("/auth/profile", payload);
+    const updatedUser = response.data.data;
+    setUser(updatedUser);
+    return updatedUser;
+  }
+
+  async function changePassword(payload) {
+    const response = await api.put("/auth/change-password", payload);
+    return response.data;
+  }
+
   const value = {
     user,
     accessToken,
@@ -123,6 +135,8 @@ export function AuthProvider({ children }) {
     logout,
     refreshAccessToken,
     fetchCurrentUser,
+    updateProfile,
+    changePassword,
   };
 
   return (
