@@ -8,7 +8,6 @@ import {
 import {
   ArrowRight,
   Boxes,
-  Check,
   Eye,
   EyeOff,
   LockKeyhole,
