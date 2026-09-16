@@ -13,6 +13,7 @@ const permissionTestRoutes = require("./routes/permission-test.routes");
 const categoryRoutes = require("./routes/category.routes");
 const itemRoutes = require("./routes/item.routes");
 const loanRoutes = require("./routes/loan.routes");
+const dashboardRoutes = require("./routes/dashboard.routes");
 
 app.use(
     cors({
@@ -54,6 +55,7 @@ app.use("/api/test-permissions", permissionTestRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/items", itemRoutes);
 app.use("/api/loans", loanRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.use((req, res) => {
     res.status(404).json({
