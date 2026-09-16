@@ -1,10 +1,10 @@
 import {
   Bell,
-  Boxes,
   ClipboardList,
   LayoutDashboard,
   LogOut,
   Menu,
+  Package,
   Settings,
   Tags,
   Users,
@@ -12,47 +12,94 @@ import {
 } from "lucide-react";
 
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
-const navigation = [
+import { useAuth } from "../context/AuthContext";
+import { isAdmin, isWarga } from "../utils/role";
+
+const adminMenus = [
   {
     label: "Dashboard",
-    to: "/",
+    path: "/",
     icon: LayoutDashboard,
   },
   {
+    label: "Barang",
+    path: "/items",
+    icon: Package,
+  },
+  {
     label: "Kategori",
-    to: "/categories",
+    path: "/categories",
     icon: Tags,
   },
   {
-    label: "Barang",
-    to: "/items",
-    icon: Boxes,
-  },
-  {
     label: "Peminjaman",
-    to: "/loans",
+    path: "/loans",
     icon: ClipboardList,
   },
   {
     label: "Warga",
-    to: "/users",
+    path: "/users",
     icon: Users,
+  },
+];
+
+const wargaMenus = [
+  {
+    label: "Dashboard",
+    path: "/",
+    icon: LayoutDashboard,
+  },
+  {
+    label: "Daftar Barang",
+    path: "/items",
+    icon: Package,
+  },
+  {
+    label: "Peminjaman Saya",
+    path: "/my-loans",
+    icon: ClipboardList,
   },
 ];
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const location = useLocation();
+
+  const userIsAdmin = isAdmin(user);
+  const userIsWarga = isWarga(user);
+
+  const menus = userIsAdmin ? adminMenus : wargaMenus;
+
+  const closeSidebarOnMobile = () => {
+    setSidebarOpen(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
+
+  const getRoleLabel = () => {
+    if (userIsAdmin) return "Administrator";
+    if (userIsWarga) return "Warga";
+    return user?.role?.name || user?.role || "User";
+  };
 
   return (
     <div className="min-h-dvh bg-slate-50">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <button
-          onClick={() => setSidebarOpen(false)}
+          type="button"
+          onClick={closeSidebarOnMobile}
           className="fixed inset-0 z-30 bg-slate-900/20 backdrop-blur-[2px] lg:hidden"
           aria-label="Tutup sidebar"
         />
@@ -85,7 +132,8 @@ export default function DashboardLayout() {
           </div>
 
           <button
-            onClick={() => setSidebarOpen(false)}
+            type="button"
+            onClick={closeSidebarOnMobile}
             className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 lg:hidden"
             aria-label="Tutup sidebar"
           >
@@ -93,33 +141,43 @@ export default function DashboardLayout() {
           </button>
         </div>
 
+
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto px-4 py-6">
           <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
             Menu utama
           </p>
 
-          <nav className="space-y-1">
-            {navigation.map((item) => {
-              const Icon = item.icon;
+          <nav className="space-y-2">
+            {menus.map((menu) => {
+              const Icon = menu.icon;
+
+              const isDashboard =
+                menu.path === "/" && location.pathname === "/";
 
               return (
                 <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === "/"}
-                  onClick={() => setSidebarOpen(false)}
-                  className={({ isActive }) =>
-                    [
-                      "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition",
-                      isActive
-                        ? "bg-emerald-50 text-emerald-700 shadow-sm"
-                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-900",
-                    ].join(" ")
-                  }
+                  key={menu.path}
+                  to={menu.path}
+                  end={menu.path === "/"}
+                  onClick={closeSidebarOnMobile}
+                  className={({ isActive }) => {
+                    const active = isDashboard || isActive;
+
+                    return [
+                      "group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition",
+                      active
+                        ? "bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/20"
+                        : "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700",
+                    ].join(" ");
+                  }}
                 >
-                  <Icon size={18} />
-                  <span>{item.label}</span>
+                  <Icon
+                    size={18}
+                    className="shrink-0 transition-transform group-hover:scale-105"
+                  />
+
+                  <span>{menu.label}</span>
                 </NavLink>
               );
             })}
@@ -128,14 +186,18 @@ export default function DashboardLayout() {
 
         {/* Bottom actions */}
         <div className="border-t border-slate-200 p-4">
-          <button className="mb-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-slate-500 transition hover:bg-slate-50 hover:text-slate-900">
+          <button
+            type="button"
+            className="mb-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+          >
             <Settings size={18} />
             Pengaturan
           </button>
 
           <button
-            onClick={logout}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-red-500 transition hover:bg-red-50 hover:text-red-600"
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-rose-500 transition hover:bg-rose-50 hover:text-rose-600"
           >
             <LogOut size={18} />
             Keluar
@@ -148,6 +210,7 @@ export default function DashboardLayout() {
         {/* Header */}
         <header className="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-200 bg-white/95 px-5 backdrop-blur sm:px-8">
           <button
+            type="button"
             onClick={() => setSidebarOpen(true)}
             className="rounded-xl p-2 text-slate-600 transition hover:bg-slate-100 hover:text-emerald-600 lg:hidden"
             aria-label="Buka sidebar"
@@ -168,6 +231,7 @@ export default function DashboardLayout() {
           <div className="ml-auto flex items-center gap-4">
             {/* Notification */}
             <button
+              type="button"
               className="relative rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-emerald-600"
               aria-label="Notifikasi"
             >
@@ -180,11 +244,11 @@ export default function DashboardLayout() {
             <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
               <div className="hidden text-right sm:block">
                 <p className="text-sm font-bold text-slate-800">
-                  {user?.name}
+                  {user?.name || "Pengguna"}
                 </p>
 
                 <p className="text-xs text-slate-500">
-                  {user?.role?.name || user?.role || "User"}
+                  {getRoleLabel()}
                 </p>
               </div>
 

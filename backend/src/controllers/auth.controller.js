@@ -27,6 +27,8 @@ async function login(req, res, next) {
       }
     );
 
+    setRefreshTokenCookie(res, result.refreshToken);
+
     return success(
       res,
       {
@@ -41,7 +43,8 @@ async function login(req, res, next) {
 }
 
 async function refresh(req, res) {
-  const refreshToken = req.cookies[REFRESH_COOKIE_NAME];
+  const refreshToken =
+    req.cookies[REFRESH_COOKIE_NAME] || req.body?.refreshToken;
 
   const result = await authService.refresh(refreshToken);
 

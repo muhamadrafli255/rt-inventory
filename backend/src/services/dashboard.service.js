@@ -2,103 +2,36 @@ const prisma = require("../config/prisma");
 
 async function getDashboardSummary() {
   const [
-    totalUsers,
     totalItems,
+    totalUsers,
     totalCategories,
     totalLoans,
-    pendingLoans,
-    approvedLoans,
-    borrowedLoans,
-    returnedLoans,
-    rejectedLoans,
-    cancelledLoans,
-    totalAvailableStock,
-    totalStock,
+    stockAgg,
   ] = await Promise.all([
-    prisma.user.count({
-      where: {
-        isActive: true,
-      },
-    }),
-
-    prisma.item.count({
-      where: {
-        isActive: true,
-      },
-    }),
-
+    prisma.item.count({ where: { isActive: true } }),
+    prisma.user.count({ where: { isActive: true } }),
     prisma.category.count(),
-
     prisma.loan.count(),
-
-    prisma.loan.count({
-      where: {
-        status: "MENUNGGU",
-      },
-    }),
-
-    prisma.loan.count({
-      where: {
-        status: "DISETUJUI",
-      },
-    }),
-
-    prisma.loan.count({
-      where: {
-        status: "DIPINJAM",
-      },
-    }),
-
-    prisma.loan.count({
-      where: {
-        status: "DIKEMBALIKAN",
-      },
-    }),
-
-    prisma.loan.count({
-      where: {
-        status: "DITOLAK",
-      },
-    }),
-
-    prisma.loan.count({
-      where: {
-        status: "DIBATALKAN",
-      },
-    }),
-
     prisma.item.aggregate({
-      where: {
-        isActive: true,
-      },
-      _sum: {
-        available: true,
-      },
-    }),
-
-    prisma.item.aggregate({
-      where: {
-        isActive: true,
-      },
+      where: { isActive: true },
       _sum: {
         quantity: true,
+        available: true,
       },
     }),
   ]);
 
+  const totalStock = stockAgg._sum.quantity || 0;
+  const availableStock = stockAgg._sum.available || 0;
+
   return {
-    totalUsers,
     totalItems,
+    totalUsers,
     totalCategories,
     totalLoans,
-    pendingLoans,
-    approvedLoans,
-    borrowedLoans,
-    returnedLoans,
-    rejectedLoans,
-    cancelledLoans,
-    totalAvailableStock: totalAvailableStock._sum.available || 0,
-    totalStock: totalStock._sum.quantity || 0,
+    totalStock,
+    totalAvailableStock: availableStock,
+    availableStock,
   };
 }
 
@@ -131,38 +64,27 @@ async function getLoanStatistics() {
 }
 
 async function getPopularItems() {
-  const groupedLoans = await prisma.loan.groupBy({
+  const popular = await prisma.loan.groupBy({
     by: ["itemId"],
-    where: {
-      status: {
-        in: [
-          "DISETUJUI",
-          "DIPINJAM",
-          "DIKEMBALIKAN",
-        ],
-      },
-    },
-    _sum: {
-      quantity: true,
-    },
     _count: {
       itemId: true,
     },
     orderBy: {
-      _sum: {
-        quantity: "desc",
+      _count: {
+        itemId: "desc",
       },
     },
-    take: 5,
+    take: 4,
   });
 
-  const itemIds = groupedLoans.map((loan) => loan.itemId);
+  if (popular.length === 0) {
+    return [];
+  }
 
+  const itemIds = popular.map((p) => p.itemId);
   const items = await prisma.item.findMany({
     where: {
-      id: {
-        in: itemIds,
-      },
+      id: { in: itemIds },
     },
     select: {
       id: true,
@@ -171,32 +93,32 @@ async function getPopularItems() {
     },
   });
 
-  return groupedLoans.map((loan) => {
-    const item = items.find(
-      (item) => item.id === loan.itemId
-    );
+  const itemMap = new Map(items.map((i) => [i.id, i]));
 
+  return popular.map((p) => {
+    const item = itemMap.get(p.itemId);
     return {
-      itemId: loan.itemId,
-      name: item?.name || "Barang tidak ditemukan",
-      code: item?.code || null,
-      totalBorrowed: loan._sum.quantity || 0,
-      totalTransactions: loan._count.itemId,
+      id: p.itemId,
+      name: item?.name || "Unknown Item",
+      code: item?.code || "",
+      totalBorrowed: p._count.itemId,
+      loanCount: p._count.itemId,
     };
   });
 }
 
 async function getRecentLoans() {
-  return prisma.loan.findMany({
-    take: 10,
+  const loans = await prisma.loan.findMany({
     orderBy: {
       createdAt: "desc",
     },
+    take: 10,
     include: {
       user: {
         select: {
           id: true,
           name: true,
+          email: true,
         },
       },
       item: {
@@ -208,6 +130,8 @@ async function getRecentLoans() {
       },
     },
   });
+
+  return loans;
 }
 
 async function getDashboard() {
@@ -231,10 +155,114 @@ async function getDashboard() {
   };
 }
 
+async function getAdminDashboard() {
+  const [
+    summary,
+    loanStatistics,
+    popularItems,
+    recentLoans,
+  ] = await Promise.all([
+    getDashboardSummary(),
+    getLoanStatistics(),
+    getPopularItems(),
+    getRecentLoans(),
+  ]);
+
+  return {
+    summary,
+    loanStatistics,
+    popularItems,
+    recentLoans,
+  };
+}
+
+async function getWargaDashboard(userId) {
+  const [
+    availableStock,
+    myLoans,
+  ] = await Promise.all([
+    prisma.item.aggregate({
+      where: {
+        isActive: true,
+      },
+      _sum: {
+        available: true,
+      },
+    }),
+
+    prisma.loan.findMany({
+      where: {
+        userId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 10,
+      include: {
+        item: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const loanSummary = await prisma.loan.groupBy({
+    by: ["status"],
+    where: {
+      userId,
+    },
+    _count: {
+      status: true,
+    },
+  });
+
+  const statusSummary = {
+    MENUNGGU: 0,
+    DISETUJUI: 0,
+    DITOLAK: 0,
+    DIPINJAM: 0,
+    DIKEMBALIKAN: 0,
+    DIBATALKAN: 0,
+  };
+
+  for (const row of loanSummary) {
+    statusSummary[row.status] = row._count.status;
+  }
+
+  return {
+    summary: {
+      totalAvailableStock:
+        availableStock._sum.available || 0,
+
+      totalMyLoans: myLoans.length,
+
+      pendingLoans: statusSummary.MENUNGGU,
+
+      approvedLoans: statusSummary.DISETUJUI,
+
+      borrowedLoans: statusSummary.DIPINJAM,
+
+      returnedLoans: statusSummary.DIKEMBALIKAN,
+
+      rejectedLoans: statusSummary.DITOLAK,
+
+      cancelledLoans: statusSummary.DIBATALKAN,
+    },
+
+    recentLoans: myLoans,
+  };
+}
+
 module.exports = {
   getDashboard,
   getDashboardSummary,
   getLoanStatistics,
   getPopularItems,
   getRecentLoans,
+  getAdminDashboard,
+  getWargaDashboard,
 };

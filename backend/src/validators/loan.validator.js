@@ -25,6 +25,7 @@ const createLoanSchema = z.object({
       .string()
       .trim()
       .max(1000)
+      .nullable()
       .optional()
       .or(z.literal("")),
 

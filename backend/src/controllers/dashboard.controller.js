@@ -1,4 +1,5 @@
 const dashboardService = require("../services/dashboard.service");
+
 const { success } = require("../utils/apiResponse");
 
 async function index(req, res) {
@@ -51,10 +52,40 @@ async function recentLoans(req, res) {
   );
 }
 
+/**
+ * Dashboard khusus admin
+ */
+async function admin(req, res) {
+  const data = await dashboardService.getAdminDashboard();
+
+  return success(
+    res,
+    data,
+    "Dashboard admin berhasil diambil"
+  );
+}
+
+/**
+ * Dashboard khusus warga
+ */
+async function warga(req, res) {
+  const data = await dashboardService.getWargaDashboard(
+    req.auth.userId
+  );
+
+  return success(
+    res,
+    data,
+    "Dashboard warga berhasil diambil"
+  );
+}
+
 module.exports = {
   index,
   summary,
   loanStatistics,
   popularItems,
   recentLoans,
+  admin,
+  warga,
 };

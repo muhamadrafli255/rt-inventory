@@ -30,6 +30,7 @@ async function main() {
 
     const permissionNames = [
         "dashboard.view",
+        "dashboard.user.view",
         "users.view",
         "users.create",
         "users.update",
@@ -85,7 +86,8 @@ async function main() {
     }
 
     const wargaPermissionNames = [
-        "dashboard.view",
+        "dashboard.user.view",
+        "categories.view",
         "items.view",
         "loans.view",
         "loans.create",

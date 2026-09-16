@@ -3,7 +3,9 @@ const express = require("express");
 const router = express.Router();
 
 const dashboardController = require("../controllers/dashboard.controller");
+
 const authenticate = require("../middlewares/auth.middleware");
+
 const asyncHandler = require("../utils/asyncHandler");
 
 const {
@@ -12,6 +14,9 @@ const {
 
 router.use(authenticate);
 
+/**
+ * Endpoint lama
+ */
 router.get(
   "/",
   requirePermission("dashboard.view"),
@@ -40,6 +45,24 @@ router.get(
   "/recent-loans",
   requirePermission("dashboard.view"),
   asyncHandler(dashboardController.recentLoans)
+);
+
+/**
+ * Endpoint dashboard khusus admin
+ */
+router.get(
+  "/admin",
+  requirePermission("dashboard.view"),
+  asyncHandler(dashboardController.admin)
+);
+
+/**
+ * Endpoint dashboard khusus warga
+ */
+router.get(
+  "/warga",
+  requirePermission("dashboard.user.view"),
+  asyncHandler(dashboardController.warga)
 );
 
 module.exports = router;

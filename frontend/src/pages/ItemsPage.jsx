@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-
 import {
   AlertCircle,
+  CalendarDays,
   CheckCircle2,
+  ClipboardList,
   Edit3,
   Package,
   Plus,
@@ -13,8 +14,11 @@ import {
 } from "lucide-react";
 
 import { createItem, deleteItem, getItems, updateItem } from "../api/itemApi";
-
 import { getCategories } from "../api/categoryApi";
+import { createLoan } from "../api/loanApi";
+import { useAuth } from "../context/AuthContext";
+import { isAdmin } from "../utils/role";
+
 import ConfirmModal from "../components/common/ConfirmModal";
 import EmptyState from "../components/common/EmptyState";
 
@@ -29,48 +33,50 @@ const initialForm = {
   imageUrl: "",
 };
 
+const initialLoanForm = {
+  quantity: 1,
+  purpose: "",
+  notes: "",
+  startDate: "",
+  endDate: "",
+};
+
 const conditionOptions = [
-  {
-    value: "BAIK",
-    label: "Baik",
-  },
-  {
-    value: "RUSAK_RINGAN",
-    label: "Rusak Ringan",
-  },
-  {
-    value: "RUSAK_BERAT",
-    label: "Rusak Berat",
-  },
+  { value: "BAIK", label: "Baik" },
+  { value: "RUSAK_RINGAN", label: "Rusak Ringan" },
+  { value: "RUSAK_BERAT", label: "Rusak Berat" },
 ];
 
 function extractArray(response) {
   const data = response?.data;
-
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (Array.isArray(data?.data)) {
-    return data.data;
-  }
-
-  if (Array.isArray(data?.items)) {
-    return data.items;
-  }
-
-  if (Array.isArray(data?.categories)) {
-    return data.categories;
-  }
-
-  if (Array.isArray(response?.data?.data?.items)) {
-    return response.data.data.items;
-  }
-
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.categories)) return data.categories;
+  if (Array.isArray(response?.data?.data?.items)) return response.data.data.items;
   return [];
 }
 
+function getErrorMessage(error, fallbackMessage) {
+  const responseData = error?.response?.data;
+  if (responseData?.message) return responseData.message;
+
+  const fieldErrors = responseData?.errors?.fieldErrors;
+  if (fieldErrors && typeof fieldErrors === "object") {
+    const messages = Object.entries(fieldErrors).flatMap(([field, errors]) => {
+      if (!Array.isArray(errors)) return [];
+      return errors.map((msg) => `${field}: ${msg}`);
+    });
+    if (messages.length > 0) return messages.join(" | ");
+  }
+
+  return fallbackMessage;
+}
+
 export default function ItemsPage() {
+  const { user } = useAuth();
+  const userIsAdmin = isAdmin(user);
+
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
 
@@ -81,31 +87,31 @@ export default function ItemsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [borrowing, setBorrowing] = useState(false);
 
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
+  const [loanFormError, setLoanFormError] = useState("");
   const [notification, setNotification] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [loanModalOpen, setLoanModalOpen] = useState(false);
 
   const [editingItem, setEditingItem] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedLoanItem, setSelectedLoanItem] = useState(null);
 
   const [form, setForm] = useState(initialForm);
+  const [loanForm, setLoanForm] = useState(initialLoanForm);
 
   const notificationTimerRef = useRef(null);
 
   const showNotification = useCallback((type, message) => {
-    setNotification({
-      type,
-      message,
-    });
-
+    setNotification({ type, message });
     if (notificationTimerRef.current) {
       clearTimeout(notificationTimerRef.current);
     }
-
     notificationTimerRef.current = setTimeout(() => {
       setNotification(null);
     }, 3500);
@@ -127,7 +133,6 @@ export default function ItemsPage() {
         } else {
           setLoading(true);
         }
-
         setError("");
 
         const [itemsResponse, categoriesResponse] = await Promise.all([
@@ -146,10 +151,7 @@ export default function ItemsPage() {
         }
       } catch (err) {
         console.error("Items fetch error:", err);
-
-        const message =
-          err.response?.data?.message || "Gagal mengambil data barang.";
-
+        const message = getErrorMessage(err, "Gagal mengambil data barang.");
         setError(message);
         showNotification("error", message);
       } finally {
@@ -157,7 +159,7 @@ export default function ItemsPage() {
         setRefreshing(false);
       }
     },
-    [showNotification],
+    [showNotification]
   );
 
   useEffect(() => {
@@ -180,19 +182,16 @@ export default function ItemsPage() {
 
   const openCreateModal = () => {
     setEditingItem(null);
-
     setForm({
       ...initialForm,
       categoryId: categories[0]?.id ? Number(categories[0].id) : "",
     });
-
     setFormError("");
     setModalOpen(true);
   };
 
   const openEditModal = (item) => {
     setEditingItem(item);
-
     setForm({
       categoryId: item.categoryId ? Number(item.categoryId) : "",
       name: item.name || "",
@@ -203,14 +202,12 @@ export default function ItemsPage() {
       condition: item.condition || "BAIK",
       imageUrl: item.imageUrl || "",
     });
-
     setFormError("");
     setModalOpen(true);
   };
 
   const closeModal = () => {
     if (saving) return;
-
     setModalOpen(false);
     setEditingItem(null);
     setForm(initialForm);
@@ -219,7 +216,6 @@ export default function ItemsPage() {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-
     setForm((previous) => ({
       ...previous,
       [name]:
@@ -241,56 +237,43 @@ export default function ItemsPage() {
       Number(form.categoryId) <= 0
     ) {
       const message = "Kategori barang wajib dipilih.";
-
       setFormError(message);
       showNotification("error", message);
-
       return;
     }
 
     if (!form.name.trim()) {
       const message = "Nama barang wajib diisi.";
-
       setFormError(message);
       showNotification("error", message);
-
       return;
     }
 
     if (!form.code.trim()) {
       const message = "Kode barang wajib diisi.";
-
       setFormError(message);
       showNotification("error", message);
-
       return;
     }
 
     if (Number(form.quantity) < 0) {
       const message = "Jumlah barang tidak boleh negatif.";
-
       setFormError(message);
       showNotification("error", message);
-
       return;
     }
 
     if (Number(form.available) < 0) {
       const message = "Jumlah tersedia tidak boleh negatif.";
-
       setFormError(message);
       showNotification("error", message);
-
       return;
     }
 
     if (Number(form.available) > Number(form.quantity)) {
-      const message =
-        "Jumlah tersedia tidak boleh lebih besar dari total jumlah.";
-
+      const message = "Jumlah tersedia tidak boleh lebih besar dari total jumlah.";
       setFormError(message);
       showNotification("error", message);
-
       return;
     }
 
@@ -298,24 +281,22 @@ export default function ItemsPage() {
       setSaving(true);
       setFormError("");
 
-const payload = {
-  categoryId: Number(form.categoryId),
-  name: form.name.trim(),
-  code: form.code.trim(),
-  description: form.description.trim() || null,
-  quantity: Number(form.quantity),
-  available: Number(form.available),
-  condition: form.condition,
-  imageUrl: form.imageUrl.trim() || null,
-};
+      const payload = {
+        categoryId: Number(form.categoryId),
+        name: form.name.trim(),
+        code: form.code.trim(),
+        description: form.description.trim() || null,
+        quantity: Number(form.quantity),
+        available: Number(form.available),
+        condition: form.condition,
+        imageUrl: form.imageUrl.trim() || null,
+      };
 
       if (editingItem) {
         await updateItem(editingItem.id, payload);
-
         showNotification("success", "Barang berhasil diperbarui.");
       } else {
         await createItem(payload);
-
         showNotification("success", "Barang berhasil ditambahkan.");
       }
 
@@ -323,13 +304,10 @@ const payload = {
       setEditingItem(null);
       setForm(initialForm);
       setFormError("");
-
       await fetchData();
     } catch (err) {
       console.error("Item save error:", err);
-
-      const message = err.response?.data?.message || "Gagal menyimpan barang.";
-
+      const message = getErrorMessage(err, "Gagal menyimpan barang.");
       setFormError(message);
       showNotification("error", message);
     } finally {
@@ -344,7 +322,6 @@ const payload = {
 
   const closeDeleteModal = () => {
     if (deleting) return;
-
     setSelectedItem(null);
     setDeleteModalOpen(false);
   };
@@ -354,26 +331,15 @@ const payload = {
 
     try {
       setDeleting(true);
-
       await deleteItem(selectedItem.id);
-
       const deletedItemName = selectedItem.name;
-
       setSelectedItem(null);
       setDeleteModalOpen(false);
-
-      showNotification(
-        "success",
-        `Barang "${deletedItemName}" berhasil dihapus.`,
-      );
-
+      showNotification("success", `Barang "${deletedItemName}" berhasil dihapus.`);
       await fetchData();
     } catch (err) {
       console.error("Item delete error:", err);
-
-      const message =
-        err.response?.data?.message || "Barang tidak dapat dihapus.";
-
+      const message = getErrorMessage(err, "Barang tidak dapat dihapus.");
       setError(message);
       showNotification("error", message);
     } finally {
@@ -381,8 +347,102 @@ const payload = {
     }
   };
 
+  /* Modal Peminjaman Langsung */
+  const openLoanModal = (item) => {
+    setSelectedLoanItem(item);
+    setLoanForm({
+      ...initialLoanForm,
+      quantity: 1,
+    });
+    setLoanFormError("");
+    setLoanModalOpen(true);
+  };
+
+  const closeLoanModal = () => {
+    if (borrowing) return;
+    setLoanModalOpen(false);
+    setSelectedLoanItem(null);
+    setLoanForm(initialLoanForm);
+    setLoanFormError("");
+  };
+
+  const handleLoanChange = (event) => {
+    const { name, value } = event.target;
+    setLoanForm((prev) => ({
+      ...prev,
+      [name]: name === "quantity" ? (value === "" ? "" : Number(value)) : value,
+    }));
+  };
+
+  const handleLoanSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!selectedLoanItem) return;
+
+    if (Number(loanForm.quantity) < 1) {
+      const msg = "Jumlah peminjaman minimal 1.";
+      setLoanFormError(msg);
+      showNotification("error", msg);
+      return;
+    }
+
+    if (Number(loanForm.quantity) > Number(selectedLoanItem.available)) {
+      const msg = `Jumlah melebihi stok tersedia (${selectedLoanItem.available} unit).`;
+      setLoanFormError(msg);
+      showNotification("error", msg);
+      return;
+    }
+
+    if (!loanForm.purpose.trim()) {
+      const msg = "Tujuan peminjaman wajib diisi.";
+      setLoanFormError(msg);
+      showNotification("error", msg);
+      return;
+    }
+
+    if (!loanForm.startDate || !loanForm.endDate) {
+      const msg = "Tanggal mulai dan selesai wajib diisi.";
+      setLoanFormError(msg);
+      showNotification("error", msg);
+      return;
+    }
+
+    if (new Date(loanForm.endDate) < new Date(loanForm.startDate)) {
+      const msg = "Tanggal selesai tidak boleh sebelum tanggal mulai.";
+      setLoanFormError(msg);
+      showNotification("error", msg);
+      return;
+    }
+
+    try {
+      setBorrowing(true);
+      setLoanFormError("");
+
+      await createLoan({
+        itemId: selectedLoanItem.id,
+        quantity: Number(loanForm.quantity),
+        purpose: loanForm.purpose.trim(),
+        notes: loanForm.notes.trim() || null,
+        startDate: loanForm.startDate,
+        endDate: loanForm.endDate,
+      });
+
+      closeLoanModal();
+      showNotification("success", `Pengajuan pinjaman "${selectedLoanItem.name}" berhasil dibuat.`);
+      await fetchData();
+    } catch (err) {
+      console.error("Direct loan error:", err);
+      const msg = getErrorMessage(err, "Gagal membuat pengajuan peminjaman.");
+      setLoanFormError(msg);
+      showNotification("error", msg);
+    } finally {
+      setBorrowing(false);
+    }
+  };
+
   return (
     <div className="relative space-y-8">
+      {/* Toast Notification */}
       {notification && (
         <div
           className={`fixed right-4 top-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm items-start gap-3 rounded-2xl border px-4 py-3 shadow-xl backdrop-blur-sm ${
@@ -392,10 +452,7 @@ const payload = {
           }`}
         >
           {notification.type === "success" ? (
-            <CheckCircle2
-              size={22}
-              className="mt-0.5 shrink-0 text-emerald-600"
-            />
+            <CheckCircle2 size={22} className="mt-0.5 shrink-0 text-emerald-600" />
           ) : (
             <AlertCircle size={22} className="mt-0.5 shrink-0 text-rose-600" />
           )}
@@ -404,7 +461,6 @@ const payload = {
             <p className="text-sm font-bold">
               {notification.type === "success" ? "Berhasil" : "Gagal"}
             </p>
-
             <p className="mt-0.5 text-sm leading-5 opacity-80">
               {notification.message}
             </p>
@@ -414,13 +470,13 @@ const payload = {
             type="button"
             onClick={() => setNotification(null)}
             className="rounded-lg p-1 opacity-60 transition hover:bg-black/5 hover:opacity-100"
-            aria-label="Tutup notifikasi"
           >
             <X size={16} />
           </button>
         </div>
       )}
 
+      {/* Header */}
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <p className="mb-2 text-sm font-semibold text-emerald-600">
@@ -428,41 +484,44 @@ const payload = {
           </p>
 
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            Data Barang
+            Daftar Barang
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            Kelola barang, stok, kondisi, dan kategori inventaris RT.
+            {userIsAdmin
+              ? "Kelola barang, stok, kondisi, dan kategori inventaris RT."
+              : "Lihat dan pinjam barang inventaris RT yang tersedia."}
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-        >
-          <Plus size={18} />
-          Tambah Barang
-        </button>
+        {/* Hanya tampilkan tombol Tambah Barang jika user adalah ADMIN */}
+        {userIsAdmin && (
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+          >
+            <Plus size={18} />
+            Tambah Barang
+          </button>
+        )}
       </div>
 
       {error && (
         <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           <AlertCircle size={18} className="mt-0.5 shrink-0" />
-
           <span>{error}</span>
-
           <button
             type="button"
             onClick={() => setError("")}
             className="ml-auto rounded-lg p-1 hover:bg-rose-100"
-            aria-label="Tutup pesan error"
           >
             <X size={16} />
           </button>
         </div>
       )}
 
+      {/* Filter and Table */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-100 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-sm">
@@ -470,7 +529,6 @@ const payload = {
               size={18}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
             />
-
             <input
               type="text"
               value={search}
@@ -487,7 +545,6 @@ const payload = {
               className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-600 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
             >
               <option value="">Semua Kategori</option>
-
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -529,7 +586,9 @@ const payload = {
             description={
               search || categoryFilter
                 ? "Coba ubah kata kunci atau filter kategori."
-                : "Tambahkan barang baru untuk mulai mengelola inventaris."
+                : userIsAdmin
+                ? "Tambahkan barang baru untuk mulai mengelola inventaris."
+                : "Belum ada barang yang terdaftar dalam inventaris."
             }
           />
         ) : (
@@ -538,15 +597,10 @@ const payload = {
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-6 py-4 font-semibold">Barang</th>
-
                   <th className="px-6 py-4 font-semibold">Kategori</th>
-
                   <th className="px-6 py-4 font-semibold">Total</th>
-
                   <th className="px-6 py-4 font-semibold">Tersedia</th>
-
                   <th className="px-6 py-4 font-semibold">Kondisi</th>
-
                   <th className="px-6 py-4 text-right font-semibold">Aksi</th>
                 </tr>
               </thead>
@@ -572,7 +626,6 @@ const payload = {
                           <p className="font-semibold text-slate-800">
                             {item.name}
                           </p>
-
                           <p className="text-xs text-slate-400">{item.code}</p>
                         </div>
                       </div>
@@ -597,24 +650,45 @@ const payload = {
                     </td>
 
                     <td className="px-6 py-4">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(item)}
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
-                          title="Edit barang"
-                        >
-                          <Edit3 size={17} />
-                        </button>
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Tombol Pinjam untuk Warga atau siapapun yang ingin meminjam saat stok > 0 */}
+                        {item.available > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => openLoanModal(item)}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                          >
+                            <ClipboardList size={14} />
+                            Pinjam
+                          </button>
+                        ) : (
+                          <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-400">
+                            Stok Habis
+                          </span>
+                        )}
 
-                        <button
-                          type="button"
-                          onClick={() => openDeleteModal(item)}
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                          title="Hapus barang"
-                        >
-                          <Trash2 size={17} />
-                        </button>
+                        {/* Tombol Edit & Hapus khusus ADMIN */}
+                        {userIsAdmin && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(item)}
+                              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
+                              title="Edit barang"
+                            >
+                              <Edit3 size={17} />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openDeleteModal(item)}
+                              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                              title="Hapus barang"
+                            >
+                              <Trash2 size={17} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -625,7 +699,8 @@ const payload = {
         )}
       </div>
 
-      {modalOpen && (
+      {/* Modal Admin (Tambah/Edit Barang) */}
+      {modalOpen && userIsAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm">
           <div className="my-8 w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 p-6">
@@ -633,7 +708,6 @@ const payload = {
                 <h2 className="text-lg font-bold text-slate-900">
                   {editingItem ? "Edit Barang" : "Tambah Barang"}
                 </h2>
-
                 <p className="mt-1 text-sm text-slate-500">
                   Isi informasi barang inventaris.
                 </p>
@@ -643,7 +717,7 @@ const payload = {
                 type="button"
                 onClick={closeModal}
                 disabled={saving}
-                className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
               >
                 <X size={19} />
               </button>
@@ -653,7 +727,6 @@ const payload = {
               {formError && (
                 <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                   <AlertCircle size={17} className="mt-0.5 shrink-0" />
-
                   <span>{formError}</span>
                 </div>
               )}
@@ -663,16 +736,14 @@ const payload = {
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Kategori
                   </label>
-
                   <select
                     name="categoryId"
                     value={form.categoryId}
                     onChange={handleChange}
                     disabled={saving}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50"
                   >
                     <option value="">Pilih kategori</option>
-
                     {categories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
@@ -685,7 +756,6 @@ const payload = {
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Kode Barang
                   </label>
-
                   <input
                     type="text"
                     name="code"
@@ -693,7 +763,7 @@ const payload = {
                     onChange={handleChange}
                     placeholder="Contoh: BRG-001"
                     disabled={saving}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm uppercase text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm uppercase text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50"
                   />
                 </div>
               </div>
@@ -702,7 +772,6 @@ const payload = {
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Nama Barang
                 </label>
-
                 <input
                   type="text"
                   name="name"
@@ -710,7 +779,7 @@ const payload = {
                   onChange={handleChange}
                   placeholder="Contoh: Kursi Plastik"
                   disabled={saving}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50"
                 />
               </div>
 
@@ -718,7 +787,6 @@ const payload = {
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Deskripsi
                 </label>
-
                 <textarea
                   name="description"
                   value={form.description}
@@ -726,7 +794,7 @@ const payload = {
                   rows={3}
                   placeholder="Deskripsi barang..."
                   disabled={saving}
-                  className="w-full resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  className="w-full resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50"
                 />
               </div>
 
@@ -735,7 +803,6 @@ const payload = {
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Total Jumlah
                   </label>
-
                   <input
                     type="number"
                     min="0"
@@ -743,7 +810,7 @@ const payload = {
                     value={form.quantity}
                     onChange={handleChange}
                     disabled={saving}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50"
                   />
                 </div>
 
@@ -751,7 +818,6 @@ const payload = {
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Jumlah Tersedia
                   </label>
-
                   <input
                     type="number"
                     min="0"
@@ -759,7 +825,7 @@ const payload = {
                     value={form.available}
                     onChange={handleChange}
                     disabled={saving}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50"
                   />
                 </div>
 
@@ -767,13 +833,12 @@ const payload = {
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Kondisi
                   </label>
-
                   <select
                     name="condition"
                     value={form.condition}
                     onChange={handleChange}
                     disabled={saving}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50"
                   >
                     {conditionOptions.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -788,7 +853,6 @@ const payload = {
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   URL Gambar
                 </label>
-
                 <input
                   type="url"
                   name="imageUrl"
@@ -796,7 +860,7 @@ const payload = {
                   onChange={handleChange}
                   placeholder="https://example.com/image.jpg"
                   disabled={saving}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50"
                 />
               </div>
 
@@ -805,23 +869,21 @@ const payload = {
                   type="button"
                   onClick={closeModal}
                   disabled={saving}
-                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
                 >
                   Batal
                 </button>
-
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                 >
                   {saving && <RefreshCw size={16} className="animate-spin" />}
-
                   {saving
                     ? "Menyimpan..."
                     : editingItem
-                      ? "Simpan Perubahan"
-                      : "Tambah Barang"}
+                    ? "Simpan Perubahan"
+                    : "Tambah Barang"}
                 </button>
               </div>
             </form>
@@ -829,14 +891,156 @@ const payload = {
         </div>
       )}
 
-      <ConfirmModal
-        open={deleteModalOpen}
-        title="Hapus barang?"
-        message={`Barang "${selectedItem?.name || ""}" akan dihapus dari inventaris.`}
-        loading={deleting}
-        onCancel={closeDeleteModal}
-        onConfirm={handleDelete}
-      />
+      {/* Modal Pinjam Barang Langsung */}
+      {loanModalOpen && selectedLoanItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div className="my-8 w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 p-6">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Ajukan Peminjaman Barang
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {selectedLoanItem.name} ({selectedLoanItem.code})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeLoanModal}
+                disabled={borrowing}
+                className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            <form onSubmit={handleLoanSubmit} className="space-y-4 p-6">
+              {loanFormError && (
+                <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+                  <AlertCircle size={16} className="shrink-0" />
+                  <span>{loanFormError}</span>
+                </div>
+              )}
+
+              <div className="rounded-xl bg-emerald-50 p-3 text-xs text-emerald-800">
+                <span className="font-bold">Stok Tersedia:</span>{" "}
+                {selectedLoanItem.available} unit
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Jumlah Dipinjam <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  name="quantity"
+                  min="1"
+                  max={selectedLoanItem.available}
+                  value={loanForm.quantity}
+                  onChange={handleLoanChange}
+                  required
+                  disabled={borrowing}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:opacity-50"
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Tanggal Mulai <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="startDate"
+                    value={loanForm.startDate}
+                    onChange={handleLoanChange}
+                    required
+                    disabled={borrowing}
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:opacity-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Tanggal Selesai <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="endDate"
+                    value={loanForm.endDate}
+                    onChange={handleLoanChange}
+                    required
+                    disabled={borrowing}
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:opacity-50"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Tujuan Peminjaman <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  name="purpose"
+                  rows="3"
+                  value={loanForm.purpose}
+                  onChange={handleLoanChange}
+                  placeholder="Jelaskan tujuan peminjaman barang ini..."
+                  required
+                  disabled={borrowing}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:opacity-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Catatan Tambahan
+                </label>
+                <textarea
+                  name="notes"
+                  rows="2"
+                  value={loanForm.notes}
+                  onChange={handleLoanChange}
+                  placeholder="Catatan opsional jika ada..."
+                  disabled={borrowing}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 disabled:opacity-50"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={closeLoanModal}
+                  disabled={borrowing}
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={borrowing}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {borrowing && <RefreshCw size={16} className="animate-spin" />}
+                  {borrowing ? "Mengirim..." : "Kirim Pengajuan"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirm Delete untuk Admin */}
+      {userIsAdmin && (
+        <ConfirmModal
+          open={deleteModalOpen}
+          title="Hapus barang?"
+          message={`Barang "${selectedItem?.name || ""}" akan dihapus dari inventaris.`}
+          loading={deleting}
+          onCancel={closeDeleteModal}
+          onConfirm={handleDelete}
+        />
+      )}
     </div>
   );
 }

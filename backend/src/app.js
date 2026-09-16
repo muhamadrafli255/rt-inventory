@@ -14,6 +14,7 @@ const categoryRoutes = require("./routes/category.routes");
 const itemRoutes = require("./routes/item.routes");
 const loanRoutes = require("./routes/loan.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
+const userRoutes = require("./routes/user.routes");
 
 app.use(
     cors({
@@ -56,6 +57,7 @@ app.use("/api/categories", categoryRoutes);
 app.use("/api/items", itemRoutes);
 app.use("/api/loans", loanRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/users", userRoutes);
 
 app.use((req, res) => {
     res.status(404).json({

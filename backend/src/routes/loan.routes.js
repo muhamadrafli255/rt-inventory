@@ -64,7 +64,7 @@ router.patch(
 router.patch(
   "/:id/borrow",
   validate(loanIdSchema),
-  requirePermission("loans.update"),
+  requirePermission("loans.borrow"),
   asyncHandler(loanController.borrow)
 );
 
