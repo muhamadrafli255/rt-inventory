@@ -12,6 +12,7 @@ import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import CategoriesPage from "./pages/CategoriesPage";
+import ItemsPage from "./pages/ItemsPage";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -42,6 +43,11 @@ export default function App() {
               <Route
                 path="/categories"
                 element={<CategoriesPage />}
+              />
+
+              <Route
+                path="/items"
+                element={<ItemsPage />}
               />
             </Route>
           </Route>

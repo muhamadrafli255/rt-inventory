@@ -1,4 +1,4 @@
-const { z } = require("zod");
+const { z, nullable } = require("zod");
 
 const itemIdSchema = z.object({
   params: z.object({
@@ -27,6 +27,7 @@ const createItemSchema = z.object({
       .string()
       .trim()
       .max(1000)
+      .nullable()
       .optional()
       .or(z.literal("")),
 
@@ -43,10 +44,11 @@ const createItemSchema = z.object({
       .default("BAIK"),
 
     imageUrl: z
-      .string()
-      .url("URL gambar tidak valid")
-      .optional()
-      .or(z.literal("")),
+    .string()
+    .url("URL gambar tidak valid")
+    .nullable()
+    .optional()
+    .or(z.literal("")),
   }),
 });
 
@@ -60,45 +62,52 @@ const updateItemSchema = z.object({
       .string()
       .trim()
       .min(2)
-      .max(150),
+      .max(150)
+      .optional(),
 
     code: z
       .string()
       .trim()
       .min(2)
       .max(50)
+      .optional()
       .transform((value) => value.toUpperCase()),
 
-    categoryId: z.coerce.number().int().positive(),
+    categoryId: z.coerce.number().int().positive().optional(),
 
     description: z
       .string()
       .trim()
       .max(1000)
+      .nullable()
       .optional()
       .or(z.literal("")),
 
     quantity: z.coerce
       .number()
       .int()
-      .min(0),
+      .min(0)
+      .optional(),
 
     available: z.coerce
       .number()
       .int()
-      .min(0),
+      .min(0)
+      .optional(),
 
     condition: z
       .string()
       .trim()
       .min(2)
-      .max(50),
+      .max(50)
+      .optional(),
 
     imageUrl: z
-      .string()
-      .url("URL gambar tidak valid")
-      .optional()
-      .or(z.literal("")),
+    .string()
+    .url("URL gambar tidak valid")
+    .nullable()
+    .optional()
+    .or(z.literal("")),
   }),
 });
 
