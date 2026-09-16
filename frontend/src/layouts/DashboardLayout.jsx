@@ -1,7 +1,6 @@
 import {
   Bell,
   Boxes,
-  ChevronDown,
   ClipboardList,
   LayoutDashboard,
   LogOut,
@@ -23,14 +22,14 @@ const navigation = [
     icon: LayoutDashboard,
   },
   {
-    label: "Barang",
-    to: "/items",
-    icon: Boxes,
-  },
-  {
     label: "Kategori",
     to: "/categories",
     icon: Tags,
+  },
+  {
+    label: "Barang",
+    to: "/items",
+    icon: Boxes,
   },
   {
     label: "Peminjaman",
@@ -192,11 +191,6 @@ export default function DashboardLayout() {
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700">
                 {user?.name?.charAt(0)?.toUpperCase() || "U"}
               </div>
-
-              <ChevronDown
-                size={16}
-                className="hidden text-slate-400 sm:block"
-              />
             </div>
           </div>
         </header>
